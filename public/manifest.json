@@ -1,0 +1,20 @@
+{
+  "short_name": "Smart Care",
+  "name": "Burjeel Smart Care",
+  "description": "Intelligent Patient Management and Doctor Appointment System",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "theme_color": "#0ea5e9",
+  "categories": ["healthcare", "medical"]
+}

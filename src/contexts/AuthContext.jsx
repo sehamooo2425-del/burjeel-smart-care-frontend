@@ -117,29 +117,29 @@ export function AuthProvider({ children }) {
    * useCallback ensures this function is not recreated on every render,
    * which prevents unnecessary re-renders in child components.
    */
-  const login = useCallback(async (email, password) => {
+  // totpCode is only passed on the second login attempt when the user has 2FA enabled.
+  const login = useCallback(async (username, password, totpCode = null) => {
     dispatch({ type: 'LOGIN_START' });
     try {
-      const response = await authService.login(email, password);
+      const response = await authService.login(username, password, totpCode);
       const { user, access_token } = response;
 
-      // Persist the token and user so the session can be restored on refresh.
       localStorage.setItem('authToken', access_token);
-      // JSON.stringify converts the user object to a string for localStorage storage.
       localStorage.setItem('user', JSON.stringify(user));
 
-      dispatch({
-        type: 'LOGIN_SUCCESS',
-        payload: { user, token: access_token },
-      });
-
+      dispatch({ type: 'LOGIN_SUCCESS', payload: { user, token: access_token } });
       return { success: true };
     } catch (error) {
-      dispatch({
-        type: 'LOGIN_ERROR',
-        payload: error.message || 'Login failed',
-      });
-      return { success: false, error: error.message || 'Login failed' };
+      // The backend signals "2FA code required" with a 401 and a detail that mentions totp_code.
+      // In that case we tell the login page to show the TOTP step instead of a generic error.
+      const detail = error?.detail || '';
+      if (detail.toLowerCase().includes('totp_code') || detail.toLowerCase().includes('2fa')) {
+        dispatch({ type: 'LOGIN_ERROR', payload: null });
+        return { success: false, requires2FA: true };
+      }
+      const msg = detail || error?.message || 'Login failed';
+      dispatch({ type: 'LOGIN_ERROR', payload: msg });
+      return { success: false, error: msg };
     }
   }, []);
 

@@ -26,6 +26,9 @@ export default function LoginPage() {
   const [errors, setErrors] = useState({});
   // loading is true while the login request is in progress, which disables the submit button.
   const [loading, setLoading] = useState(false);
+  // 2FA step state — shown after a successful credential check when the account has 2FA enabled.
+  const [requires2FA, setRequires2FA] = useState(false);
+  const [totpCode, setTotpCode] = useState('');
   // Forgot-password modal state.
   const [showForgot, setShowForgot] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
@@ -70,15 +73,37 @@ export default function LoginPage() {
 
       if (result.success) {
         showSuccess('Login successful!');
-        // Redirect to the home/dashboard page after a successful login.
         navigate('/');
+      } else if (result.requires2FA) {
+        // Credentials were correct but the account requires a TOTP code — show the 2FA step.
+        setRequires2FA(true);
       } else {
         showError(result.error || 'Login failed');
       }
     } catch (err) {
       showError(err.message || 'An error occurred');
     } finally {
-      // Always turn off the loading spinner when the request finishes, success or not.
+      setLoading(false);
+    }
+  };
+
+  // Called on the second login step when the user submits their 6-digit TOTP code.
+  const handleTotpSubmit = async (e) => {
+    e.preventDefault();
+    if (totpCode.length !== 6) { showError('Please enter the 6-digit code from your authenticator app'); return; }
+    setLoading(true);
+    try {
+      const result = await login(formData.username, formData.password, totpCode);
+      if (result.success) {
+        showSuccess('Login successful!');
+        navigate('/');
+      } else {
+        showError(result.error || 'Invalid authentication code');
+        setTotpCode('');
+      }
+    } catch (err) {
+      showError(err.message || 'An error occurred');
+    } finally {
       setLoading(false);
     }
   };
@@ -223,6 +248,51 @@ export default function LoginPage() {
           © 2024 {APP_CONFIG.NAME}. All rights reserved.
         </p>
       </div>
+
+      {/* 2FA Modal — opens automatically after correct credentials when account has 2FA enabled */}
+      <Modal
+        isOpen={requires2FA}
+        onClose={() => { setRequires2FA(false); setTotpCode(''); }}
+        title="Two-Factor Authentication"
+      >
+        <form onSubmit={handleTotpSubmit} className="space-y-5">
+          <div className="flex items-center gap-3 p-3 bg-primary-50 border border-primary-200 rounded-lg">
+            <FiLock className="w-5 h-5 text-primary-600 shrink-0" />
+            <p className="text-sm text-primary-700">
+              Your credentials are correct. Enter the 6-digit code from your authenticator app to continue.
+            </p>
+          </div>
+          <Input
+            label="Authentication Code"
+            type="text"
+            inputMode="numeric"
+            placeholder="000000"
+            value={totpCode}
+            onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            maxLength={6}
+            required
+          />
+          <div className="flex gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              onClick={() => { setRequires2FA(false); setTotpCode(''); }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              className="flex-1"
+              loading={loading}
+              disabled={totpCode.length !== 6}
+            >
+              Verify & Sign In
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Forgot Password Modal */}
       <Modal isOpen={showForgot} onClose={handleForgotClose} title="Reset Password">

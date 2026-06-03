@@ -15,15 +15,19 @@ import api from './api';
  * @param {string} password
  * @returns {Promise<object>} Server response with token and user data.
  */
-export const login = async (username, password) => {
-  try {
-    const response = await api.post('/auth/login', { username, password });
-    return response;
-  } catch (error) {
-    console.error(`[Auth] Login failed for ${username}:`, error?.message || error);
-    // Re-throw a clean Error so the UI only needs to display error.message.
-    throw new Error(error?.message || 'Invalid username or password');
-  }
+/*
+ * login — Sends credentials to the server.
+ * totpCode is optional; pass it only when the user has 2FA enabled and has entered their code.
+ * The raw error is re-thrown (not wrapped) so callers can inspect the `detail` field and
+ * detect when the backend is asking for a TOTP code before reporting a failure.
+ */
+export const login = async (username, password, totpCode = null) => {
+  const body = { username, password };
+  if (totpCode) body.totp_code = totpCode;
+  // Let the error propagate as-is — do NOT wrap it in `new Error()` here.
+  // Wrapping strips the `detail` field that callers need to detect the 2FA prompt.
+  const response = await api.post('/auth/login', body);
+  return response;
 };
 
 /*

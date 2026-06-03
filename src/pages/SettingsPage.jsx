@@ -37,9 +37,10 @@ export default function SettingsPage() {
     confirm_password: ''
   });
 
-  // 2FA state: twoFactorUri is the TOTP provisioning URI shown to the user after setup is started.
+  // 2FA state
   const [twoFactorUri, setTwoFactorUri] = useState('');
   const [twoFactorSecret, setTwoFactorSecret] = useState('');
+  const [twoFactorQr, setTwoFactorQr] = useState('');   // base64 SVG data URL for the QR image
   // twoFactorCode is the 6-digit code the user types from their authenticator app.
   const [twoFactorCode, setTwoFactorCode] = useState('');
 
@@ -93,30 +94,29 @@ export default function SettingsPage() {
   const setup2FA = async () => {
     setLoading(true);
     try {
+      // api.js unwraps response.data, so `response` here IS the payload object directly.
       const response = await api.post('/auth/2fa/setup');
-      // Store the provisioning URI and secret returned by the backend.
-      setTwoFactorUri(response.data.uri);
-      setTwoFactorSecret(response.data.secret);
+      setTwoFactorUri(response.uri);
+      setTwoFactorSecret(response.secret);
+      setTwoFactorQr(response.qr_url);
     } catch (err) {
-      showError(err.response?.data?.detail || 'Failed to setup 2FA');
+      showError(err.detail || err.message || 'Failed to setup 2FA');
     } finally {
       setLoading(false);
     }
   };
 
-  // Verifies the 6-digit TOTP code the user typed from their authenticator app.
-  // If the code is correct, 2FA is enabled on the account.
   const verify2FA = async () => {
     setLoading(true);
     try {
-      // The code is passed as a query parameter in the URL.
       await api.post(`/auth/2fa/verify?code=${twoFactorCode}`);
       success('2FA enabled successfully!');
-      // Clear the setup state so the 2FA form disappears now that setup is complete.
       setTwoFactorUri('');
+      setTwoFactorSecret('');
+      setTwoFactorQr('');
       setTwoFactorCode('');
     } catch (err) {
-      showError(err.response?.data?.detail || 'Failed to verify 2FA code');
+      showError(err.detail || err.message || 'Failed to verify 2FA code');
     } finally {
       setLoading(false);
     }
@@ -273,18 +273,37 @@ export default function SettingsPage() {
                   </Button>
                 ) : (
                   <div className="space-y-4 border p-4 rounded-lg bg-gray-50">
-                    <p className="font-medium">1. Scan this URI into your Authenticator App (like Google Authenticator):</p>
-                    <code className="block p-2 bg-white border rounded text-xs break-all">{twoFactorUri}</code>
-                    
-                    <p className="font-medium">2. Enter the generated code below:</p>
+                    <p className="font-medium text-sm">1. Scan the QR code with Google Authenticator (or any TOTP app):</p>
+
+                    {/* QR code image returned from the backend as a base64 SVG data URL */}
+                    {twoFactorQr && (
+                      <div className="flex justify-center">
+                        <img
+                          src={twoFactorQr}
+                          alt="2FA QR Code"
+                          className="w-44 h-44 border rounded-lg bg-white p-2"
+                        />
+                      </div>
+                    )}
+
+                    {/* Manual-entry fallback: show the secret key in groups of 4 for readability */}
+                    <details className="text-xs text-secondary-500">
+                      <summary className="cursor-pointer hover:text-secondary-700">Can't scan? Enter the key manually</summary>
+                      <code className="block mt-2 p-2 bg-white border rounded break-all select-all">
+                        {twoFactorSecret.match(/.{1,4}/g)?.join(' ')}
+                      </code>
+                    </details>
+
+                    <p className="font-medium text-sm">2. Enter the 6-digit code your app shows:</p>
                     <div className="flex gap-2">
                       <Input
                         placeholder="123456"
                         value={twoFactorCode}
                         onChange={(e) => setTwoFactorCode(e.target.value)}
                         className="flex-1"
+                        maxLength={6}
                       />
-                      <Button onClick={verify2FA} disabled={loading || !twoFactorCode}>
+                      <Button onClick={verify2FA} disabled={loading || twoFactorCode.length !== 6}>
                         Verify
                       </Button>
                     </div>

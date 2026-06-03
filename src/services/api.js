@@ -57,14 +57,15 @@ api.interceptors.response.use(
 
     console.error(`[API Error ${errorCode}]:`, errorMessage);
 
-    // Only redirect on 401 if user has a token (authenticated session expired)
-    // A 401 without a stored token means the user was never logged in — no redirect needed.
-    if (error.response?.status === 401 && localStorage.getItem('authToken')) {
+    // Redirect to login when a stored session token is rejected (expired/revoked).
+    // Exclude the login endpoint itself — a 401 there means bad credentials or 2FA required,
+    // NOT an expired session, so we must not reload the page and destroy the 2FA flow.
+    const requestUrl = error.config?.url || '';
+    const isLoginEndpoint = requestUrl.includes('/auth/login');
+    if (error.response?.status === 401 && localStorage.getItem('authToken') && !isLoginEndpoint) {
       console.warn('Token expired, logging out...');
       localStorage.removeItem('authToken');
       localStorage.removeItem('user');
-      // Hard-navigate to the login page; a React router push won't work here because
-      // interceptors run outside of the component tree.
       window.location.href = '/login';
     }
 

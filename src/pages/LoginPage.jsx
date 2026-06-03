@@ -18,6 +18,7 @@ import { validateRequired, validatePassword } from '../utils/validators';
 import { FiUser, FiLock, FiMail } from 'react-icons/fi';
 import { APP_CONFIG } from '../utils/constants';
 import api from '../services/api';
+import * as authService from '../services/authService';
 
 export default function LoginPage() {
   // formData holds the current values typed into the username and password fields.
@@ -34,7 +35,7 @@ export default function LoginPage() {
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
-  const { login } = useAuth();
+  const { storeSession } = useAuth();
   const navigate = useNavigate();
   const { error: showError, success: showSuccess } = useContext(AlertContext);
 
@@ -58,51 +59,44 @@ export default function LoginPage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Called when the user clicks "Sign In". Prevents the default browser form submission,
-  // validates the fields, then sends the credentials to the backend login API.
+  // Step 1: validate credentials. If 2FA is required the backend returns 401 with a
+  // specific detail string — we detect that here and open the TOTP modal instead of
+  // showing a generic error. On success we store the session and navigate away.
   const handleSubmit = async (e) => {
-    // Stops the browser from refreshing the page on form submit.
     e.preventDefault();
-
-    // Stop early if validation fails — don't bother calling the API.
     if (!validateForm()) return;
-
     setLoading(true);
     try {
-      const result = await login(formData.username, formData.password);
-
-      if (result.success) {
-        showSuccess('Login successful!');
-        navigate('/');
-      } else if (result.requires2FA) {
-        // Credentials were correct but the account requires a TOTP code — show the 2FA step.
-        setRequires2FA(true);
-      } else {
-        showError(result.error || 'Login failed');
-      }
+      const response = await authService.login(formData.username, formData.password);
+      storeSession(response);
+      showSuccess('Login successful!');
+      navigate('/');
     } catch (err) {
-      showError(err.message || 'An error occurred');
+      // err is the raw rejected value from api.js: { detail: "..." } or { message: "..." }
+      const detail = err?.detail || '';
+      if (detail.toLowerCase().includes('totp_code') || detail.toLowerCase().includes('2fa')) {
+        setRequires2FA(true);   // Credentials OK — just need the TOTP code.
+      } else {
+        showError(detail || err?.message || 'Invalid username or password');
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // Called on the second login step when the user submits their 6-digit TOTP code.
+  // Step 2 (only when 2FA is enabled): send credentials + the TOTP code together.
   const handleTotpSubmit = async (e) => {
     e.preventDefault();
     if (totpCode.length !== 6) { showError('Please enter the 6-digit code from your authenticator app'); return; }
     setLoading(true);
     try {
-      const result = await login(formData.username, formData.password, totpCode);
-      if (result.success) {
-        showSuccess('Login successful!');
-        navigate('/');
-      } else {
-        showError(result.error || 'Invalid authentication code');
-        setTotpCode('');
-      }
+      const response = await authService.login(formData.username, formData.password, totpCode);
+      storeSession(response);
+      showSuccess('Login successful!');
+      navigate('/');
     } catch (err) {
-      showError(err.message || 'An error occurred');
+      showError(err?.detail || err?.message || 'Invalid authentication code');
+      setTotpCode('');
     } finally {
       setLoading(false);
     }

@@ -188,10 +188,18 @@ export function AuthProvider({ children }) {
    */
   const updateUser = useCallback((userData) => {
     const updatedUser = { ...state.user, ...userData };
-    // Overwrite the user entry in localStorage with the merged data.
     localStorage.setItem('user', JSON.stringify(updatedUser));
     dispatch({ type: 'UPDATE_USER', payload: userData });
   }, [state.user]);
+
+  // Stores a successful login response (token + user) without making an API call.
+  // Used by LoginPage so it can call authService directly (for 2FA detection) and then
+  // hand the result here to persist the session exactly as the full login() function would.
+  const storeSession = useCallback(({ user, access_token }) => {
+    localStorage.setItem('authToken', access_token);
+    localStorage.setItem('user', JSON.stringify(user));
+    dispatch({ type: 'LOGIN_SUCCESS', payload: { user, token: access_token } });
+  }, []);
 
   return (
     /*
@@ -207,6 +215,7 @@ export function AuthProvider({ children }) {
         logout,
         register,
         updateUser,
+        storeSession,
       }}
     >
       {children}

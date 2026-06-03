@@ -13,9 +13,11 @@ import { AlertContext } from '../contexts/AlertContext';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 import Card from '../components/common/Card';
+import Modal from '../components/common/Modal';
 import { validateRequired, validatePassword } from '../utils/validators';
-import { FiUser, FiLock } from 'react-icons/fi';
+import { FiUser, FiLock, FiMail } from 'react-icons/fi';
 import { APP_CONFIG } from '../utils/constants';
+import api from '../services/api';
 
 export default function LoginPage() {
   // formData holds the current values typed into the username and password fields.
@@ -24,6 +26,11 @@ export default function LoginPage() {
   const [errors, setErrors] = useState({});
   // loading is true while the login request is in progress, which disables the submit button.
   const [loading, setLoading] = useState(false);
+  // Forgot-password modal state.
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
   const { error: showError, success: showSuccess } = useContext(AlertContext);
@@ -74,6 +81,28 @@ export default function LoginPage() {
       // Always turn off the loading spinner when the request finishes, success or not.
       setLoading(false);
     }
+  };
+
+  // Submits the forgot-password request to the backend.
+  const handleForgotSubmit = async (e) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) { showError('Please enter your email address'); return; }
+    setForgotLoading(true);
+    try {
+      await api.post('/auth/forgot-password', { email: forgotEmail.trim().toLowerCase() });
+      setForgotSent(true);
+    } catch (err) {
+      showError(err.detail || err.message || 'Something went wrong. Please try again.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  // Resets the forgot-password modal back to its initial state when closed.
+  const handleForgotClose = () => {
+    setShowForgot(false);
+    setForgotEmail('');
+    setForgotSent(false);
   };
 
   // Updates the matching field inside formData whenever the user types in an input.
@@ -154,9 +183,13 @@ export default function LoginPage() {
                 />
                 <span className="text-secondary-700">Remember me</span>
               </label>
-              <a href="#forgot" className="text-primary-600 hover:text-primary-700 font-medium">
+              <button
+                type="button"
+                onClick={() => setShowForgot(true)}
+                className="text-primary-600 hover:text-primary-700 font-medium"
+              >
                 Forgot password?
-              </a>
+              </button>
             </div>
 
             {/* Submit Button */}
@@ -190,6 +223,48 @@ export default function LoginPage() {
           © 2024 {APP_CONFIG.NAME}. All rights reserved.
         </p>
       </div>
+
+      {/* Forgot Password Modal */}
+      <Modal isOpen={showForgot} onClose={handleForgotClose} title="Reset Password">
+        {forgotSent ? (
+          <div className="text-center space-y-4 py-2">
+            <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+              <FiMail className="w-7 h-7 text-green-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-secondary-900">Check your inbox</h3>
+            <p className="text-secondary-600 text-sm">
+              If an account is registered with <strong>{forgotEmail}</strong>, a temporary password has been sent.
+              Log in with it and change your password immediately from Account Settings.
+            </p>
+            <Button variant="primary" onClick={handleForgotClose} className="w-full">
+              Back to Login
+            </Button>
+          </div>
+        ) : (
+          <form onSubmit={handleForgotSubmit} className="space-y-4">
+            <p className="text-secondary-600 text-sm">
+              Enter the email address linked to your account. We'll send you a temporary password you can use to log in.
+            </p>
+            <Input
+              label="Email Address"
+              type="email"
+              placeholder="your@email.com"
+              value={forgotEmail}
+              onChange={(e) => setForgotEmail(e.target.value)}
+              icon={FiMail}
+              required
+            />
+            <div className="flex gap-3 pt-2">
+              <Button type="button" variant="outline" onClick={handleForgotClose} className="flex-1">
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" loading={forgotLoading} className="flex-1">
+                Send Temporary Password
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   );
 }

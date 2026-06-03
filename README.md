@@ -36,10 +36,10 @@ src/
 │   └── useReportExport.js# CSV / Excel / PDF export logic
 │
 ├── services/             # All API calls to the backend — one file per topic
-│   ├── api.js            # Axios instance with auth token injection
+│   ├── api.js            # Axios instance with auth token injection and error handling
 │   ├── authService.js    # Login, register, get current user
 │   ├── patientService.js # Create, read, update, delete patients
-│   ├── attendanceService.js # Mark and fetch attendance records
+│   ├── attendanceService.js # Mark, fetch, update, and delete attendance records
 │   ├── reminderService.js   # Schedule and send reminders
 │   ├── reportsService.js    # Attendance analytics (used by admin dashboard)
 │   ├── userService.js    # Admin user management
@@ -91,7 +91,9 @@ src/
 ## How It Works
 
 ### Authentication
-When a user logs in, the backend returns a JWT token. The frontend stores that token in `localStorage` and attaches it to every API request via an Axios interceptor. On page load, `AuthContext` reads the token from `localStorage` to restore the session automatically.
+When a user logs in, the backend returns a JWT token. The frontend stores that token in `localStorage` and attaches it to every API request via an Axios interceptor. On page load, `AuthContext` reads the token from `localStorage` to restore the session automatically. A 401 response clears the token and redirects to `/login`.
+
+**Forgot password**: clicking "Forgot password?" on the login page opens a modal. The user enters their email address and receives a temporary password by email. The temporary password avoids visually ambiguous characters (0, o, O, 1, l, I) to prevent confusion. After logging in with it, the user should change their password immediately from Account Settings.
 
 ### Role-Based Routing
 `App.jsx` checks `user.role` and only renders routes that belong to that role. An admin cannot accidentally visit a patient page and vice versa. The sidebar in `Sidebar.jsx` mirrors this — each role has its own list of navigation links.
@@ -103,11 +105,29 @@ When a user logs in, the backend returns a JWT token. The frontend stores that t
 | `patient` | `/patient/dashboard`, `/patient/doctors`, `/patient/appointments`, `/patient/chat` |
 | all roles | `/settings` |
 
+### Reminders
+`ReminderPage` displays reminders sorted newest scheduled date first. Admins can create reminders for any doctor; doctors automatically have their own username set as `display_name`. Two reminder types are supported: `medication` and `doctor_visit`.
+
+### Attendance
+`AttendancePage` enforces several rules entirely in the UI before any API call is made:
+
+- **Date-first flow**: the user picks the appointment date first, which triggers a lookup of eligible patients.
+- **Eligible patients only**: only patients with a `doctor_visit` reminder on the selected date appear in the patient dropdown.
+- **Doctor restriction**: doctors only see patients with appointments assigned to them (`display_name` matches their username). Admins see all.
+- **Appointment picker**: if a patient has multiple appointments on the same day, a second dropdown appears so the staff member picks exactly which appointment to mark.
+- **No double-marking**: reminders that already have an attendance record are flagged "(already marked)" in the dropdown and the Save button stays disabled.
+- **Mark Late**: absent records show a "Mark Late" button to change the status if a patient arrives late.
+- **Delete**: any record can be deleted via the Action column (with a confirmation prompt).
+- **Log order**: the attendance log is sorted newest-first by timestamp.
+
 ### Chat
 `ChatPage` calls `chatService` directly for all messaging operations — no intermediate context layer. Opening a conversation automatically calls `PUT /api/v1/chat/messages/read` to mark incoming messages as read and clear the unread badge.
 
 ### Reports & Analytics
-`ReportsPage` fetches all raw data once on mount (patients, reminders, attendance) and applies all filtering client-side. Switching the date range preset or clicking "Apply Filters" recomputes stat cards and both charts without any additional API calls. Percentage changes compare the selected period against the equally-long period immediately before it.
+`ReportsPage` fetches all raw data once on mount (patients, reminders, attendance) and applies all filtering client-side. Switching the date range preset or clicking "Apply Filters" recomputes stat cards and both charts without any additional API calls. Percentage changes compare the selected period against the equally-long period immediately before it; periods with no baseline data show `—` instead of a misleading `+100%`.
+
+### Settings
+`SettingsPage` lets any logged-in user change their own password via `PUT /api/v1/profile/password`. No admin intervention is required. A security confirmation email is sent automatically after a successful password change, including the timestamp, so the user is alerted if they did not initiate the change.
 
 ### Notifications
 `AlertContext` holds a list of active toast messages. Any component can call `success("Done!")` or `error("Something went wrong")` and a toast appears on screen and auto-dismisses after a few seconds.
@@ -158,6 +178,5 @@ docker-compose up --build
 | Variable | Purpose |
 |---|---|
 | `VITE_API_BASE_URL` | Backend API base URL (e.g. `http://localhost:8000/api/v1`) |
-| `VITE_WS_URL` | WebSocket server URL (e.g. `ws://localhost:8000`) |
 | `VITE_APP_NAME` | Application display name |
 | `VITE_APP_VERSION` | Version shown in the sidebar footer |

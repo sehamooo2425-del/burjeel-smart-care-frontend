@@ -57,7 +57,7 @@ export default function SettingsPage() {
       });
       success('Profile updated successfully!');
     } catch (err) {
-      showError(err.response?.data?.detail || 'Failed to update profile');
+      showError(err.detail || err.message || 'Failed to update profile');
     } finally {
       setLoading(false);
     }
@@ -81,7 +81,8 @@ export default function SettingsPage() {
       // Clear all password fields after a successful change for security.
       setPasswordData({ old_password: '', new_password: '', confirm_password: '' });
     } catch (err) {
-      showError(err.response?.data?.detail || 'Failed to update password');
+      // api.js unwraps the response, so err IS the data object — check .detail not .response.data.detail
+      showError(err.detail || err.message || 'Failed to update password');
     } finally {
       setLoading(false);
     }

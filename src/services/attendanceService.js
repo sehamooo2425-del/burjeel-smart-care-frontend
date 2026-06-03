@@ -47,6 +47,15 @@ export const createAttendance = async (attendanceData) => {
 };
 
 /*
+ * deleteAttendance — Permanently removes an attendance record by its ID.
+ * @param {string|number} attendanceId - The ID of the record to delete.
+ * @returns {Promise<void>}
+ */
+export const deleteAttendance = async (attendanceId) => {
+  await api.delete(`/attendance/${attendanceId}/`);
+};
+
+/*
  * updateAttendance — Modifies an existing attendance record (e.g. correcting a status).
  * @param {string|number} attendanceId   - The ID of the record to update.
  * @param {object}        attendanceData - The updated attendance fields.

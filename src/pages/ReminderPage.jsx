@@ -245,7 +245,13 @@ export default function ReminderPage() {
             <ExportMenu onExport={handleExport} isExporting={isExporting} />
           </div>
         </div>
-        <Table columns={columns} data={reminders} hover striped />
+        {/* Sort newest scheduled_date first so the most recent reminders appear at the top. */}
+        <Table
+          columns={columns}
+          data={[...reminders].sort((a, b) => new Date(b.scheduled_date) - new Date(a.scheduled_date))}
+          hover
+          striped
+        />
       </Card>
 
       <Modal

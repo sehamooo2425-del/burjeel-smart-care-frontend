@@ -40,8 +40,8 @@ export default function DoctorDashboard() {
    * then filters reminders to only those of type 'doctor_visit' scheduled today or later.
    */
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
+    const fetchData = async (showLoader = true) => {
+      if (showLoader) setLoading(true);
       try {
         const [patients, reminders] = await Promise.all([
           patientService.getPatients(),
@@ -49,26 +49,28 @@ export default function DoctorDashboard() {
         ]);
 
         const today = new Date().toISOString().split('T')[0];
-        // Keep only doctor_visit reminders that are scheduled from today onwards.
-        const upcoming = reminders.filter(r => r.reminder_type === 'doctor_visit' && r.scheduled_date && r.scheduled_date >= today);
+        // Only doctor_visit reminders assigned to this doctor.
+        const myVisits = reminders.filter(r =>
+          r.reminder_type === 'doctor_visit' && r.display_name === user?.username
+        );
+        const myUpcoming = myVisits.filter(r => r.scheduled_date && r.scheduled_date >= today);
 
         setStats({
           totalPatients: patients.length,
-          upcomingAppointments: upcoming.length,
-          myReminders: reminders.length, // Already filtered by backend
+          upcomingAppointments: myUpcoming.length,
+          myReminders: myVisits.length,
         });
 
         setRecentAppointments(
-          upcoming
-            .slice() // Copy the array before sorting so the original isn't mutated.
-            .sort((a, b) => new Date(b.scheduled_date) - new Date(a.scheduled_date)) // Newest first.
-            .slice(0, 10) // Limit to 10 rows in the table.
+          myUpcoming
+            .slice()
+            .sort((a, b) => new Date(b.scheduled_date) - new Date(a.scheduled_date))
+            .slice(0, 10)
             .map(r => {
             const patient = patients.find(p => p.patient_id === r.patient_id);
             return {
               id: r.reminder_id,
               patientName: patient?.full_name || `Patient ${r.patient_id}`,
-              // A reminder is "Notified" if at least one SMS was successfully delivered.
               status: r.success_sent > 0 ? 'Notified' : 'Pending',
               time: new Date(r.scheduled_date).toLocaleString('en-US', { timeZone: 'Asia/Muscat', hour12: true }),
             };
@@ -78,12 +80,14 @@ export default function DoctorDashboard() {
         console.error('Error fetching dashboard data:', err);
         error('Failed to load dashboard data');
       } finally {
-        setLoading(false);
+        if (showLoader) setLoading(false);
       }
     };
 
     fetchData();
-  }, [error]);
+    const interval = setInterval(() => fetchData(false), 60000);
+    return () => clearInterval(interval);
+  }, [error, user?.username]);
 
   // Column definitions for the appointments table.
   const columns = [

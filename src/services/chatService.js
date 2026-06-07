@@ -42,6 +42,16 @@ export const sendMessage = async (receiverId, content) => {
 };
 
 /*
+ * deleteMessage — Soft-deletes a message for both participants.
+ * The server sets is_deleted = true; the bubble is replaced with "This message was deleted".
+ * @param {number} messageId - The message_id to delete.
+ */
+export const deleteMessage = async (messageId) => {
+  const response = await api.patch(`/chat/messages/${messageId}/delete`);
+  return response;
+};
+
+/*
  * markAsRead — Marks all unread messages from a specific sender as read.
  * Called whenever the user opens a conversation so the unread badge clears
  * and is_read is updated in the database.

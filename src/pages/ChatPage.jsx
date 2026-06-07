@@ -5,8 +5,8 @@
  * Users can send messages to any other registered user in the system.
  */
 
-import { useState, useEffect, useContext } from 'react';
-import { FiSend, FiSmile, FiPaperclip } from 'react-icons/fi';
+import { useState, useEffect, useRef, useContext } from 'react';
+import { FiSend, FiSmile, FiPaperclip, FiTrash2 } from 'react-icons/fi';
 import Card from '../components/common/Card';
 import Input from '../components/common/Input';
 import Button from '../components/common/Button';
@@ -22,10 +22,12 @@ export default function ChatPage() {
   const [message, setMessage] = useState('');
   // conversations is the full list of conversations this user is part of.
   const [conversations, setConversations] = useState([]);
+  const [userSearch, setUserSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const { error: showError } = useContext(AlertContext);
   // user is used to determine which messages were sent by "me" (right-aligned vs. left-aligned).
   const { user } = useAuth();
+  const messagesContainerRef = useRef(null);
 
   /*
    * Runs when the component mounts (and whenever user changes, though that's rare).
@@ -131,6 +133,37 @@ export default function ChatPage() {
     }
   };
 
+  const handleDeleteMessage = async (messageId) => {
+    try {
+      await chatService.deleteMessage(messageId);
+      const markDeleted = (msgs) =>
+        msgs.map((m) => (m.message_id === messageId ? { ...m, is_deleted: true } : m));
+      setConversations((prev) =>
+        prev.map((conv) => ({ ...conv, messages: markDeleted(conv.messages) }))
+      );
+      setSelectedConversation((prev) => ({ ...prev, messages: markDeleted(prev.messages) }));
+    } catch (err) {
+      showError('Failed to delete message');
+    }
+  };
+
+  // Scroll only the chat container to the bottom whenever the conversation or its messages change.
+  useEffect(() => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
+  }, [selectedConversation?.other_participant?.user_id, selectedConversation?.messages?.length]);
+
+  const formatDateSeparator = (timestamp) => {
+    const date = new Date(timestamp);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (date.toDateString() === today.toDateString()) return 'Today';
+    if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+
   if (loading) {
     return <div className="flex items-center justify-center h-full">Loading...</div>;
   }
@@ -145,10 +178,21 @@ export default function ChatPage() {
       <div className="flex flex-col md:grid md:grid-cols-4 gap-6 h-[calc(100vh-12rem)] min-h-[600px]">
         {/* Conversations List */}
         <Card className="md:col-span-1 overflow-y-auto flex-shrink-0 h-64 md:h-auto">
-          <h2 className="text-lg font-bold text-secondary-900 mb-4">All Users</h2>
+          <h2 className="text-lg font-bold text-secondary-900 mb-3">All Users</h2>
+          <input
+            type="text"
+            placeholder="Search users..."
+            value={userSearch}
+            onChange={(e) => setUserSearch(e.target.value)}
+            className="w-full mb-3 px-3 py-2 text-sm border border-secondary-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+          />
           <div className="space-y-3">
-            {conversations.length > 0 ? (
-              conversations.map((conv) => {
+            {conversations.filter((c) =>
+              c.other_participant.username.toLowerCase().includes(userSearch.toLowerCase())
+            ).length > 0 ? (
+              conversations.filter((c) =>
+                c.other_participant.username.toLowerCase().includes(userSearch.toLowerCase())
+              ).map((conv) => {
                 const otherUser = conv.other_participant;
                 const hasMessages = conv.messages && conv.messages.length > 0;
                 return (
@@ -164,8 +208,12 @@ export default function ChatPage() {
                     `}
                   >
                     <div className="relative">
-                      <div className="w-10 h-10 bg-primary-600 rounded-full flex items-center justify-center text-white font-bold">
-                        {otherUser.username.charAt(0).toUpperCase()}
+                      <div className="w-10 h-10 rounded-full overflow-hidden bg-primary-600 flex items-center justify-center text-white font-bold flex-shrink-0">
+                        {otherUser.profile_picture_url ? (
+                          <img src={otherUser.profile_picture_url} alt={otherUser.username} className="w-full h-full object-cover" />
+                        ) : (
+                          otherUser.username.charAt(0).toUpperCase()
+                        )}
                       </div>
                       <div
                         className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${
@@ -190,7 +238,9 @@ export default function ChatPage() {
                 );
               })
             ) : (
-              <p className="text-secondary-500 text-sm">No users available</p>
+              <p className="text-secondary-500 text-sm">
+                {userSearch ? 'No users match your search' : 'No users available'}
+              </p>
             )}
           </div>
         </Card>
@@ -200,7 +250,14 @@ export default function ChatPage() {
           {selectedConversation ? (
             <>
               <div className="pb-4 border-b border-secondary-200 mb-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full overflow-hidden bg-primary-600 flex items-center justify-center text-white font-bold flex-shrink-0">
+                    {selectedConversation.other_participant.profile_picture_url ? (
+                      <img src={selectedConversation.other_participant.profile_picture_url} alt={selectedConversation.other_participant.username} className="w-full h-full object-cover" />
+                    ) : (
+                      selectedConversation.other_participant.username.charAt(0).toUpperCase()
+                    )}
+                  </div>
                   <div>
                     <h3 className="font-bold text-secondary-900">{selectedConversation.other_participant.username}</h3>
                     <p className="text-xs text-secondary-500 flex items-center gap-2">
@@ -211,34 +268,63 @@ export default function ChatPage() {
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto mb-4 space-y-4 px-2">
+              <div ref={messagesContainerRef} className="flex-1 overflow-y-auto mb-4 space-y-4 px-2">
                 {selectedConversation.messages && selectedConversation.messages.length > 0 ? (
-                  selectedConversation.messages.map((msg, idx) => (
-                    // Align sent messages to the right, received messages to the left.
-                    <div
-                      key={msg.message_id || idx}
-                      className={`flex ${msg.sender_id === user?.user_id ? 'justify-end' : 'justify-start'}`}
-                    >
-                      {/* Messages from the current user appear in the primary colour;
-                          messages from the other person appear in a light grey bubble. */}
-                      <div
-                        className={`
-                          max-w-xs px-4 py-2 rounded-lg
-                          ${msg.sender_id === user?.user_id
-                            ? 'bg-primary-600 text-white rounded-br-none'
-                            : 'bg-secondary-100 text-secondary-900 rounded-bl-none'
-                          }
-                        `}
-                      >
-                        <p className={`text-sm ${msg.sender_id === user?.user_id ? 'text-white' : 'text-secondary-900'}`}>
-                          {msg.message_text}
-                        </p>
-                        <p className={`text-xs mt-1 ${msg.sender_id === user?.user_id ? 'text-primary-100' : 'text-secondary-500'}`}>
-                          {new Date(msg.timestamp).toLocaleTimeString()}
-                        </p>
-                      </div>
-                    </div>
-                  ))
+                  <>
+                    {selectedConversation.messages.map((msg, idx) => {
+                      const msgs = selectedConversation.messages;
+                      const msgDate = new Date(msg.timestamp).toDateString();
+                      const prevMsgDate = idx > 0 ? new Date(msgs[idx - 1].timestamp).toDateString() : null;
+                      const showSeparator = msgDate !== prevMsgDate;
+                      return (
+                        <div key={msg.message_id || idx}>
+                          {showSeparator && (
+                            <div className="flex items-center gap-2 my-3">
+                              <div className="flex-1 h-px bg-secondary-200" />
+                              <span className="text-xs text-secondary-400 font-medium px-2">
+                                {formatDateSeparator(msg.timestamp)}
+                              </span>
+                              <div className="flex-1 h-px bg-secondary-200" />
+                            </div>
+                          )}
+                          <div className={`flex items-end gap-1 group ${msg.sender_id === user?.user_id ? 'justify-end' : 'justify-start'}`}>
+                            {/* Trash icon left of bubble for sender's own messages */}
+                            {msg.sender_id === user?.user_id && !msg.is_deleted && (
+                              <button
+                                onClick={() => handleDeleteMessage(msg.message_id)}
+                                className="hidden group-hover:flex p-1 rounded text-secondary-400 hover:text-red-500 transition-colors flex-shrink-0"
+                                title="Delete message"
+                              >
+                                <FiTrash2 size={13} />
+                              </button>
+                            )}
+                            <div
+                              className={`
+                                max-w-xs px-4 py-2 rounded-lg
+                                ${msg.is_deleted
+                                  ? 'bg-secondary-100 border border-secondary-300'
+                                  : msg.sender_id === user?.user_id
+                                    ? 'bg-primary-600 text-white rounded-br-none'
+                                    : 'bg-secondary-100 text-secondary-900 rounded-bl-none'
+                                }
+                              `}
+                            >
+                              {msg.is_deleted ? (
+                                <p className="text-sm italic text-secondary-400">This message was deleted</p>
+                              ) : (
+                                <p className={`text-sm ${msg.sender_id === user?.user_id ? 'text-white' : 'text-secondary-900'}`}>
+                                  {msg.message_text}
+                                </p>
+                              )}
+                              <p className={`text-xs mt-1 ${msg.is_deleted ? 'text-secondary-400' : msg.sender_id === user?.user_id ? 'text-primary-100' : 'text-secondary-500'}`}>
+                                {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+</>
                 ) : (
                   <div className="flex items-center justify-center h-full text-secondary-500">
                     No messages yet. Start the conversation!

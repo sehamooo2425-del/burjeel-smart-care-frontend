@@ -102,16 +102,22 @@ export default function LoginPage() {
     }
   };
 
-  // Submits the forgot-password request to the backend.
+  // Submits the forgot-password request. If the email field is empty we skip the API call
+  // and go straight to the success screen — no error is shown because email is optional
+  // in this system and we never reveal whether an account exists for a given email.
   const handleForgotSubmit = async (e) => {
     e.preventDefault();
-    if (!forgotEmail.trim()) { showError('Please enter your email address'); return; }
+    if (!forgotEmail.trim()) {
+      setForgotSent(true); // Show the generic success screen without contacting the server.
+      return;
+    }
     setForgotLoading(true);
     try {
       await api.post('/auth/forgot-password', { email: forgotEmail.trim().toLowerCase() });
       setForgotSent(true);
     } catch (err) {
-      showError(err.detail || err.message || 'Something went wrong. Please try again.');
+      // Show a vague message — never reveal whether the email is registered.
+      setForgotSent(true);
     } finally {
       setForgotLoading(false);
     }
@@ -316,7 +322,6 @@ export default function LoginPage() {
               value={forgotEmail}
               onChange={(e) => setForgotEmail(e.target.value)}
               icon={FiMail}
-              required
             />
             <div className="flex gap-3 pt-2">
               <Button type="button" variant="outline" onClick={handleForgotClose} className="flex-1">

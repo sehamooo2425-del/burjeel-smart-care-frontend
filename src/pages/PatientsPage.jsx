@@ -128,7 +128,7 @@ export default function PatientsPage() {
       });
       fetchData();
     } catch (err) {
-      showError(err.message || 'Failed to save patient');
+      showError(err.detail || err.message || 'Failed to save patient');
     } finally {
       setSubmitting(false);
     }
@@ -143,7 +143,7 @@ export default function PatientsPage() {
       setShowPasswordModal(false);
       setResetPasswordValue('');
     } catch (err) {
-      showError(`Failed to reset password: ${err.response?.data?.detail || err.message}`);
+      showError(err.detail || err.message || 'Failed to reset password');
     }
   };
 

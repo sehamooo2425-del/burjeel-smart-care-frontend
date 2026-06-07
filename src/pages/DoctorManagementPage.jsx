@@ -51,7 +51,7 @@ export default function DoctorManagementPage() {
       setShowPasswordModal(false);
       setResetPasswordValue('');
     } catch (err) {
-      showError(`Failed to reset password: ${err.response?.data?.detail || err.message}`);
+      showError(err.detail || err.message || 'Failed to reset password');
     }
   };
 
@@ -91,7 +91,7 @@ export default function DoctorManagementPage() {
       setFormData({ username: '', email: '', password: '', gender: '', specialty: '', license_number: '', department: '' });
       fetchDoctors();
     } catch (err) {
-      showError(`Failed to ${isEditMode ? 'update' : 'add'} doctor: ${err.response?.data?.detail || err.message}`);
+      showError(err.detail || err.message || `Failed to ${isEditMode ? 'update' : 'add'} doctor`);
     }
   };
 

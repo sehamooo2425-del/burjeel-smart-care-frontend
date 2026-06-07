@@ -42,8 +42,8 @@ export default function AdminDashboard() {
    * (all three requests start at the same time to avoid waiting for each one in sequence).
    */
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
+    const fetchData = async (showLoader = true) => {
+      if (showLoader) setLoading(true);
       try {
         const [patients, reminders, attendanceReport] = await Promise.all([
           patientService.getPatients(),
@@ -53,7 +53,6 @@ export default function AdminDashboard() {
 
         setStats({
           totalPatients: patients.length,
-          // Count how many reminders have today's date by comparing the start of the ISO date string.
           remindersToday: reminders.filter(r => {
             const today = new Date().toISOString().split('T')[0];
             return r.scheduled_date && r.scheduled_date.startsWith(today);
@@ -64,11 +63,10 @@ export default function AdminDashboard() {
 
         setRecentReminders(
           reminders
-            .slice() // .slice() makes a shallow copy so we don't mutate the original array.
-            .sort((a, b) => new Date(b.scheduled_date) - new Date(a.scheduled_date)) // Newest first.
-            .slice(0, 10) // Only show the 10 most recent reminders in the table.
+            .slice()
+            .sort((a, b) => new Date(b.scheduled_date) - new Date(a.scheduled_date))
+            .slice(0, 10)
             .map(r => {
-            // Look up the patient object whose ID matches this reminder's patient_id.
             const patient = patients.find(p => p.patient_id === r.patient_id);
             return {
               id: r.reminder_id,
@@ -76,7 +74,6 @@ export default function AdminDashboard() {
               phone: patient?.phone_number || 'N/A',
               success: r.success_sent || 0,
               failed: r.failed_sent || 0,
-              // Display the date/time in the Asia/Muscat timezone (Oman local time).
               time: new Date(r.scheduled_date).toLocaleString('en-US', { timeZone: 'Asia/Muscat', hour12: true }),
             };
           })
@@ -85,11 +82,13 @@ export default function AdminDashboard() {
         console.error('Error fetching dashboard data:', err);
         error('Failed to load dashboard data');
       } finally {
-        setLoading(false);
+        if (showLoader) setLoading(false);
       }
     };
 
     fetchData();
+    const interval = setInterval(() => fetchData(false), 60000);
+    return () => clearInterval(interval);
   }, [error]);
 
   // Column definitions for the reminders table — each object maps a data key to a column header.

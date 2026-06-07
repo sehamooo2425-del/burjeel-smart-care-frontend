@@ -42,14 +42,12 @@ export default function PatientDashboard() {
    * then pre-processes the data for the cards and charts.
    */
   useEffect(() => {
-    const fetchDashboardData = async () => {
+    const fetchDashboardData = async (showLoader = true) => {
       try {
-        setLoading(true);
-        // /patients/me returns the profile record linked to the currently logged-in user.
+        if (showLoader) setLoading(true);
         const profileRes = await api.get('/patients/me');
         setPatientData(profileRes);
 
-        // The backend automatically returns only this patient's reminders based on their login token.
         const remindersRes = await api.get('/reminders/');
 
         const formattedReminders = remindersRes
@@ -57,22 +55,19 @@ export default function PatientDashboard() {
             const isDoctor = r.reminder_type === 'doctor_visit';
             return {
               id: r.reminder_id,
-              // Prefix doctor names with "Dr." to make them more readable.
               title: isDoctor ? `Dr. ${r.display_name}` : r.display_name,
               type: isDoctor ? 'Doctor Visit' : 'Medication',
               date: new Date(r.scheduled_date).toLocaleDateString(),
               time: new Date(r.scheduled_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
               status: r.status,
-              // rawDate is kept as a Date object so we can sort and filter numerically.
               rawDate: new Date(r.scheduled_date),
               isDoctor
             };
           })
-          .sort((a, b) => a.rawDate - b.rawDate); // Soonest reminder first.
+          .sort((a, b) => a.rawDate - b.rawDate);
 
         setReminders(formattedReminders);
 
-        // Count medication vs. doctor-visit reminders to populate the first pie chart.
         const medCount = formattedReminders.filter(r => !r.isDoctor).length;
         const docCount = formattedReminders.filter(r => r.isDoctor).length;
         setTypeData([
@@ -80,7 +75,6 @@ export default function PatientDashboard() {
           { name: 'Doctor Visits', value: docCount },
         ]);
 
-        // Count completed vs. pending reminders to populate the second pie chart.
         const completedCount = formattedReminders.filter(r => r.status === 'completed').length;
         const pendingCount = formattedReminders.filter(r => r.status !== 'completed').length;
         setStatusData([
@@ -91,11 +85,13 @@ export default function PatientDashboard() {
       } catch (err) {
         showError('Failed to load dashboard data');
       } finally {
-        setLoading(false);
+        if (showLoader) setLoading(false);
       }
     };
 
     fetchDashboardData();
+    const interval = setInterval(() => fetchDashboardData(false), 60000);
+    return () => clearInterval(interval);
   }, [showError]);
 
   // Exports the patient's full reminder list to a downloadable file.
